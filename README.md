@@ -2,6 +2,8 @@
 
 Enhanced Sentio dashboard configuration with Average Daily Gain metrics for BlueFin Perps trading analysis.
 
+# Credits to evandekim for this beautiful dashboard! I am just helping keep it maintained add functionality.
+
 ## Features
 
 ### Original Panels
