@@ -1,0 +1,355 @@
+{
+  "createdAt": "2025-06-18T02:12:18.532782Z",
+  "extra": {
+    "templateVariables": {
+      "address": {
+        "options": [
+          "0x3753041ccba494b0006edaf552c9d78bf680827bf18b2e3004c4c8c447eba095"
+        ],
+        "sourceName": "__custom__"
+      }
+    }
+  },
+  "id": "ZFpTMN0a",
+  "layouts": {
+    "responsiveLayouts": {
+      "md": {
+        "layouts": [
+          {
+            "h": 4,
+            "i": "-sYQyrvBAckcs_ru",
+            "w": 6
+          },
+          {
+            "h": 4,
+            "i": "iGdTpw7h56ue6zbq",
+            "w": 6,
+            "x": 6,
+            "y": 4
+          },
+          {
+            "h": 4,
+            "i": "DfeuXpCkqeTvqzZd",
+            "w": 6,
+            "y": 4
+          },
+          {
+            "h": 4,
+            "i": "jsG3p9_B3auqVtPY",
+            "w": 6,
+            "x": 6
+          },
+          {
+            "h": 4,
+            "i": "M5m4fjCp8lYIpKUL",
+            "w": 12,
+            "y": 8
+          },
+          {
+            "h": 7,
+            "i": "BVoN5iCCWsZYgsW5",
+            "w": 4,
+            "x": 7,
+            "y": 12
+          },
+          {
+            "h": 4,
+            "i": "avgDailyGain",
+            "w": 6,
+            "x": 0,
+            "y": 19
+          },
+          {
+            "h": 4,
+            "i": "avgDailyGainChart",
+            "w": 6,
+            "x": 6,
+            "y": 19
+          },
+          {
+            "h": 4,
+            "i": "totalDailyGain",
+            "w": 6,
+            "x": 0,
+            "y": 23
+          },
+          {
+            "h": 4,
+            "i": "avgDailyGain7d",
+            "w": 6,
+            "x": 6,
+            "y": 23
+          },
+          {
+            "h": 4,
+            "i": "avgDailyGain30d",
+            "w": 6,
+            "x": 0,
+            "y": 27
+          },
+          {
+            "h": 4,
+            "i": "overallAvgDailyGain",
+            "w": 6,
+            "x": 6,
+            "y": 27
+          }
+        ]
+      }
+    }
+  },
+  "name": "Quantfin Analytics",
+  "ownerId": "Ds780onFo1aZ",
+  "panels": {
+    "-sYQyrvBAckcs_ru": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Volume (USD)",
+            "scale": true,
+            "stacked": "samesign"
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- This CTE defines the complete set of perpetual markets.\\n    -- It manually adds BTC and ETH markets and unions them with the latest data from the PerpetualCreation table.\\n    perpetual_markets_info AS (\\n        -- Manually adding market info for BTC-PERP.\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n\\n        UNION ALL\\n\\n        -- Manually adding market info for ETH-PERP.\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n\\n        UNION ALL\\n\\n        -- This subquery uses the argMax function to find the most recent name\\n        -- for each market ID, ensuring the market names are up-to-date.\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY\\n            market_id\\n    ),\\n\\n    -- This CTE filters for all trades involving the specified address and calculates the notional value.\\n    -- It captures volume whether the address was the maker or the taker ('address').\\n    user_fills AS (\\n        SELECT\\n            fills.timestamp,\\n            markets.market_name,\\n            -- Notional value is calculated for each fill.\\n            toFloat64(fills.fillPrice) * toFloat64(fills.fillQty) AS notional_value\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            -- We filter for trades where the specified address is either the maker or the taker.\\n            -- Based on the provided schema, 'address' is the new likely identifier for the taker.\\n            (\\n                -- fills.maker = '0xaba76f0124ff4fab90f623a44039591acd6845c27784e7735ed7d3fb0f2729ae'\\n                fills.maker = $address\\n            )\\n            -- We only consider the 'buy' side of each trade to prevent double-counting volume.\\n            -- AND fills.isBuy = 1\\n            -- The date filter is retained from the previous query.\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n    ),\\n\\n    -- This CTE aggregates the user's trades into a simple daily volume total for each market.\\n    daily_user_volume AS (\\n        SELECT\\n            toDate(timestamp) AS trade_date,\\n            market_name,\\n            sum(notional_value) AS daily_notional_value\\n        FROM user_fills\\n        GROUP BY\\n            trade_date,\\n            market_name\\n    )\\n\\n-- The final SELECT statement calculates the running cumulative total of the user's volume.\\nSELECT\\n    trade_date,\\n    market_name,\\n    -- This window function creates the running total (cumulative sum) of volume for each market, ordered by date.\\n    sum(daily_notional_value) OVER (PARTITION BY market_name ORDER BY trade_date ASC) AS cumulative_notional_value\\nFROM daily_user_volume\\nORDER BY\\n    market_name,\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "BAR"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "-sYQyrvBAckcs_ru",
+      "name": "Cumulative Volume (Per Market)"
+    },
+    "avgDailyGain": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Daily Gain (%)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- Market information mapping\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY market_id\\n    ),\\n\\n    -- Calculate daily PnL from realized trades\\n    daily_pnl AS (\\n        SELECT\\n            toDate(fills.timestamp) AS trade_date,\\n            markets.market_name,\\n            -- Calculate daily PnL: (sell_price - buy_price) * quantity for closed positions\\n            sum(\\n                case \\n                    when fills.isBuy = 0 then -- sell order\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else -- buy order\\n                        -toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                end\\n            ) AS daily_pnl,\\n            -- Calculate daily volume for percentage calculation\\n            sum(toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)) AS daily_volume\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            fills.sigMaker = $address\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n        GROUP BY\\n            trade_date,\\n            market_name\\n    ),\\n\\n    -- Calculate daily gain percentage\\n    daily_gain_percentage AS (\\n        SELECT\\n            trade_date,\\n            market_name,\\n            daily_pnl,\\n            daily_volume,\\n            -- Calculate daily gain as percentage of volume\\n            case \\n                when daily_volume > 0 then (daily_pnl / daily_volume) * 100\\n                else 0\\n            end as daily_gain_pct\\n        FROM daily_pnl\\n    )\\n\\n-- Final result with running average\\nSELECT\\n    trade_date,\\n    market_name,\\n    daily_gain_pct,\\n    -- Calculate 7-day moving average of daily gains\\n    avg(daily_gain_pct) OVER (\\n        PARTITION BY market_name \\n        ORDER BY trade_date \\n        ROWS BETWEEN 6 PRECEDING AND CURRENT ROW\\n    ) AS avg_daily_gain_7d,\\n    -- Calculate overall average daily gain\\n    avg(daily_gain_pct) OVER (PARTITION BY market_name) AS overall_avg_daily_gain\\nFROM daily_gain_percentage\\nORDER BY\\n    market_name,\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "LINE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "avgDailyGain",
+      "name": "Average Daily Gain"
+    },
+    "avgDailyGainChart": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Cumulative Gain (%)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- Market information mapping\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY market_id\\n    ),\\n\\n    -- Calculate daily PnL and cumulative performance\\n    daily_performance AS (\\n        SELECT\\n            toDate(fills.timestamp) AS trade_date,\\n            markets.market_name,\\n            -- Calculate daily PnL\\n            sum(\\n                case \\n                    when fills.isBuy = 0 then -- sell order (closing position)\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else -- buy order (opening position)\\n                        -toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                end\\n            ) AS daily_pnl,\\n            -- Calculate daily invested capital (absolute value of buy orders)\\n            sum(\\n                case \\n                    when fills.isBuy = 1 then\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else 0\\n                end\\n            ) AS daily_invested_capital\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            fills.sigMaker = $address\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n        GROUP BY\\n            trade_date,\\n            market_name\\n    ),\\n\\n    -- Calculate cumulative performance metrics\\n    cumulative_performance AS (\\n        SELECT\\n            trade_date,\\n            market_name,\\n            daily_pnl,\\n            daily_invested_capital,\\n            -- Running sum of PnL\\n            sum(daily_pnl) OVER (\\n                PARTITION BY market_name \\n                ORDER BY trade_date \\n                ROWS UNBOUNDED PRECEDING\\n            ) AS cumulative_pnl,\\n            -- Running sum of invested capital\\n            sum(daily_invested_capital) OVER (\\n                PARTITION BY market_name \\n                ORDER BY trade_date \\n                ROWS UNBOUNDED PRECEDING\\n            ) AS cumulative_invested_capital\\n        FROM daily_performance\\n    )\\n\\n-- Final result with cumulative gain percentage\\nSELECT\\n    trade_date,\\n    market_name,\\n    daily_pnl,\\n    cumulative_pnl,\\n    cumulative_invested_capital,\\n    -- Calculate cumulative gain percentage\\n    case \\n        when cumulative_invested_capital > 0 then \\n            (cumulative_pnl / cumulative_invested_capital) * 100\\n        else 0\\n    end as cumulative_gain_pct,\\n    -- Calculate daily return percentage\\n    case \\n        when daily_invested_capital > 0 then\\n            (daily_pnl / daily_invested_capital) * 100\\n        else 0\\n    end as daily_return_pct\\nFROM cumulative_performance\\nORDER BY\\n    market_name,\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "BAR"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "avgDailyGainChart",
+      "name": "Cumulative Performance"
+    },
+    "BVoN5iCCWsZYgsW5": {
+      "chart": {
+        "config": {},
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- This CTE defines the complete set of perpetual markets.\\n    -- It manually adds BTC and ETH markets and unions them with the latest data from the PerpetualCreation table.\\n    perpetual_markets_info AS (\\n        -- Manually adding market info for BTC-PERP.\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n\\n        UNION ALL\\n\\n        -- Manually adding market info for ETH-PERP.\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n\\n        UNION ALL\\n\\n        -- This subquery uses the argMax function to find the most recent name\\n        -- for each market ID, ensuring the market names are up-to-date.\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY\\n            market_id\\n    ),\\n\\n    -- This CTE filters for all trades involving the specified address and calculates the notional value.\\n    -- It captures volume whether the address was the maker or the taker ('address').\\n    user_fills AS (\\n        SELECT\\n            fills.timestamp,\\n            markets.market_name,\\n            -- Notional value is calculated for each fill.\\n            toFloat64(fills.fillPrice) * toFloat64(fills.fillQty) AS notional_value\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            -- We filter for trades where the specified address is either the maker or the taker.\\n            -- Based on the provided schema, 'address' is the new likely identifier for the taker.\\n            (\\n                fills.maker = $address\\n            )\\n            -- We only consider the 'buy' side of each trade to prevent double-counting volume.\\n            -- AND fills.isBuy = 1\\n            -- The date filter is retained from the previous query.\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n    ),\\n\\n    -- This CTE aggregates the user's trades into a simple daily volume total for each market.\\n    daily_user_volume AS (\\n        SELECT\\n            toDate(timestamp) AS trade_date,\\n            market_name,\\n            sum(notional_value) AS daily_notional_value\\n        FROM user_fills\\n        GROUP BY\\n            trade_date,\\n            market_name\\n    )\\n\\n-- The final SELECT statement now includes both the daily notional value and the running cumulative total.\\nSELECT\\n    trade_date,\\n    market_name,\\n    daily_notional_value,\\n    -- This window function creates the running total (cumulative sum) of volume for each market, ordered by date.\\n    sum(daily_notional_value) OVER (PARTITION BY market_name ORDER BY trade_date ASC) AS cumulative_notional_value\\nFROM daily_user_volume\\nORDER BY\\n    market_name,\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "TABLE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "BVoN5iCCWsZYgsW5",
+      "name": "Daily Data Per Market"
+    },
+    "DfeuXpCkqeTvqzZd": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Volume (USD)",
+            "scale": true,
+            "stacked": "samesign"
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- This CTE defines the complete set of perpetual markets.\\n    -- It manually adds BTC and ETH markets and unions them with the latest data from the PerpetualCreation table.\\n    perpetual_markets_info AS (\\n        -- Manually adding market info for BTC-PERP.\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n\\n        UNION ALL\\n\\n        -- Manually adding market info for ETH-PERP.\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n\\n        UNION ALL\\n\\n        -- This subquery uses the argMax function to find the most recent name\\n        -- for each market ID, ensuring the market names are up-to-date.\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY\\n            market_id\\n    ),\\n\\n    -- This CTE filters for all trades involving the specified address and calculates the notional value.\\n    -- It captures volume whether the address was the maker or the taker ('address').\\n    user_fills AS (\\n        SELECT\\n            fills.timestamp,\\n            markets.market_name,\\n            -- Notional value is calculated for each fill.\\n            toFloat64(fills.fillPrice) * toFloat64(fills.fillQty) AS notional_value\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            -- We filter for trades where the specified address is either the maker or the taker.\\n            -- Based on the provided schema, 'address' is the new likely identifier for the taker.\\n            (\\n                -- fills.maker = '0xaba76f0124ff4fab90f623a44039591acd6845c27784e7735ed7d3fb0f2729ae'\\n                fills.maker = $address\\n            )\\n            -- We only consider the 'buy' side of each trade to prevent double-counting volume.\\n            -- AND fills.isBuy = 1\\n            -- The date filter is retained from the previous query.\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n    ),\\n\\n    -- This CTE aggregates the user's trades into a simple daily volume total for each market.\\n    daily_user_volume AS (\\n        SELECT\\n            toDate(timestamp) AS trade_date,\\n            market_name,\\n            sum(notional_value) AS daily_notional_value\\n        FROM user_fills\\n        GROUP BY\\n            trade_date,\\n            market_name\\n    )\\n\\n-- The final SELECT statement returns the daily trading volume for the user, instead of a cumulative value.\\nSELECT\\n    trade_date,\\n    market_name,\\n    daily_notional_value\\nFROM daily_user_volume\\nORDER BY\\n    market_name,\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "BAR"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "DfeuXpCkqeTvqzZd",
+      "name": "Daily Volume Per Market"
+    },
+    "M5m4fjCp8lYIpKUL": {
+      "chart": {
+        "config": {},
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- This CTE prepares the market information, mapping market IDs to human-readable names.\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY\\n            market_id\\n    ),\\n\\n    -- This CTE aggregates all buy and sell activity for the specified user, per market.\\n    user_trade_aggregates AS (\\n        SELECT\\n            market,\\n            -- Sum of quantities for all buy trades.\\n            sumIf(toFloat64(fillQty), isBuy) AS total_buy_qty,\\n            -- Sum of notional values for all buy trades.\\n            sumIf(toFloat64(fillPrice) * toFloat64(fillQty), isBuy) AS total_buy_notional,\\n            -- Sum of quantities for all sell trades.\\n            sumIf(toFloat64(fillQty), not isBuy) AS total_sell_qty,\\n            -- Sum of notional values for all sell trades.\\n            sumIf(toFloat64(fillPrice) * toFloat64(fillQty), not isBuy) AS total_sell_notional,\\n            -- Count of buy trades (longs opened or shorts closed).\\n            countIf(isBuy) as long_trade_count,\\n            -- Count of sell trades (shorts opened or longs closed).\\n            countIf(not isBuy) as short_trade_count,\\n            -- Total number of trades.\\n            count(*) as total_trade_count\\n        FROM\\n            bluefin_perps.OrderFillV2\\n        WHERE\\n            sigMaker = $address\\n        GROUP BY\\n            market\\n    )\\n\\n-- The final SELECT calculates the realized PnL and current position based on the aggregated trade data.\\nSELECT\\n    markets.market_name,\\n    -- Calculate the average price for all buys. Returns 0 if no buys.\\n    if(agg.total_buy_qty > 0, agg.total_buy_notional / agg.total_buy_qty, 0) AS avg_buy_price,\\n    -- Calculate the average price for all sells. Returns 0 if no sells.\\n    if(agg.total_sell_qty > 0, agg.total_sell_notional / agg.total_sell_qty, 0) AS avg_sell_price,\\n    \\n    -- Exposing the total quantities for clarity.\\n    agg.total_buy_qty,\\n    agg.total_sell_qty,\\n\\n    -- The quantity of the asset that has been \\\"closed\\\" (i.e., both bought and sold).\\n    least(agg.total_buy_qty, agg.total_sell_qty) AS closed_qty,\\n    \\n    -- Calculate the realized PnL. This is the profit/loss from the closed quantity.\\n    (avg_sell_price - avg_buy_price) * closed_qty AS realized_trading_pnl,\\n\\n    -- Calculate the current open position quantity.\\n    agg.total_buy_qty - agg.total_sell_qty AS open_position_qty,\\n\\n    -- Exposing the trade counts.\\n    agg.long_trade_count,\\n    agg.short_trade_count,\\n    agg.total_trade_count,\\n\\n    -- NEW: Exposing the cumulative notional volumes.\\n    agg.total_buy_notional AS cumulative_long_volume,\\n    agg.total_sell_notional AS cumulative_short_volume,\\n    agg.total_buy_notional + agg.total_sell_notional AS total_cumulative_volume\\nFROM\\n    user_trade_aggregates AS agg\\nJOIN\\n    perpetual_markets_info AS markets ON agg.market = markets.market_id\\nWHERE\\n    -- We only want to see markets where a position has been closed and PnL realized.\\n    closed_qty > 0;\",\"size\":100}",
+        "type": "TABLE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "M5m4fjCp8lYIpKUL",
+      "name": "Cumulative Trading Stats"
+    },
+    "iGdTpw7h56ue6zbq": {
+      "chart": {
+        "config": {
+          "labelConfig": {
+            "columns": [
+              {
+                "name": "market_name",
+                "showLabel": true,
+                "showValue": true
+              }
+            ]
+          },
+          "xAxis": {
+            "column": "timestamp",
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Margin (USD)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- This CTE prepares the market information, mapping market IDs to human-readable names.\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY\\n            market_id\\n    ),\\n\\n    -- This CTE ranks every fill by its size relative to other fills\\n    -- on the same day and in the same market.\\n    ranked_fills AS (\\n        SELECT\\n            timestamp,\\n            market,\\n            toFloat64(leverage) as leverage,\\n            toFloat64(fillQty) as quantity,\\n            toFloat64(fillPrice) as price,\\n            -- Calculate the percentile rank of each order's quantity for that day and market.\\n            percent_rank() OVER (PARTITION BY toDate(timestamp), market ORDER BY quantity) as quantity_percentile_rank\\n        FROM\\n            bluefin_perps.OrderFillV2\\n        WHERE\\n            sigMaker = $address\\n    )\\n\\n-- The final SELECT displays the calculated margin for only the most significant fills.\\nSELECT\\n    rf.timestamp,\\n    pm.market_name,\\n    -- Calculate the margin used for the order by dividing the notional value (qty * price) by the leverage.\\n    if(rf.leverage > 0, (rf.quantity * rf.price) / rf.leverage, 0) AS margin_used\\nFROM\\n    ranked_fills as rf\\nJOIN\\n    perpetual_markets_info AS pm ON rf.market = pm.market_id\\nWHERE\\n    -- Filter for orders in the top 50% by quantity AND where the used margin is greater than $25.\\n    -- rf.quantity_percentile_rank >= 0.50\\n    margin_used > 25\\nORDER BY\\n    rf.timestamp DESC;\",\"size\":10000}",
+        "type": "SCATTER"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "iGdTpw7h56ue6zbq",
+      "name": "Order Sizes"
+    },
+    "jsG3p9_B3auqVtPY": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Margin (USD)",
+            "scale": true,
+            "stacked": "samesign"
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- This CTE prepares the market information, mapping market IDs to human-readable names.\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY\\n            market_id\\n    ),\\n\\n    -- This CTE now selects leverage along with notional value and then ranks the orders\\n    -- by notional value to find the largest one.\\n    ranked_orders AS (\\n        SELECT\\n            toDate(timestamp) as trade_date,\\n            market,\\n            sigMaker as user_address,\\n            -- Calculate the notional value for each individual trade.\\n            toFloat64(fillPrice) * toFloat64(fillQty) as notional_value,\\n            -- Select the leverage for the trade. Casting to Float64 for calculations.\\n            toFloat64(leverage) as leverage,\\n            \\n            -- Rank orders by notional value, partitioned by day and market for the specified user.\\n            row_number() OVER (PARTITION BY trade_date, market ORDER BY notional_value DESC) as rn\\n        FROM\\n            bluefin_perps.OrderFillV2\\n        WHERE\\n            -- This clause filters for the specific user address.\\n            -- sigMaker = '0xa3edb224f320177ed86d2a8711c18634ed19bbee8fdddaf162bd60b00f474fcb'\\n            sigMaker = $address\\n    )\\n\\n-- The final SELECT now includes the margin calculation for the largest daily order.\\nSELECT\\n    ro.trade_date,\\n    pm.market_name,\\n    -- ro.user_address,\\n    -- ro.notional_value AS largest_order_notional,\\n    -- Calculate the margin used for the order by dividing the notional value by the leverage.\\n    -- The if() function prevents division by zero errors if leverage is 0.\\n    if(ro.leverage > 0, ro.notional_value / ro.leverage, 0) AS margin_used\\nFROM\\n    ranked_orders AS ro\\nJOIN\\n    perpetual_markets_info AS pm ON ro.market = pm.market_id\\nWHERE\\n    -- Filter to get only the largest order (by notional value) for each partition.\\n    ro.rn = 1\\nORDER BY\\n    ro.trade_date DESC\",\"size\":10000}",
+        "type": "BAR"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "jsG3p9_B3auqVtPY",
+      "name": "Largest Positions Executed (Daily)"
+    },
+    "totalDailyGain": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Daily Gain (%)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- Market information mapping\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY market_id\\n    ),\\n\\n    -- Calculate daily PnL across all markets\\n    daily_total_pnl AS (\\n        SELECT\\n            toDate(fills.timestamp) AS trade_date,\\n            -- Calculate total daily PnL across all markets\\n            sum(\\n                case \\n                    when fills.isBuy = 0 then -- sell order\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else -- buy order\\n                        -toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                end\\n            ) AS total_daily_pnl,\\n            -- Calculate total daily volume across all markets\\n            sum(toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)) AS total_daily_volume\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            fills.sigMaker = $address\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n        GROUP BY\\n            trade_date\\n    ),\\n\\n    -- Calculate total daily gain percentage\\n    total_daily_gain AS (\\n        SELECT\\n            trade_date,\\n            total_daily_pnl,\\n            total_daily_volume,\\n            -- Calculate total daily gain as percentage of total volume\\n            case \\n                when total_daily_volume > 0 then (total_daily_pnl / total_daily_volume) * 100\\n                else 0\\n            end as total_daily_gain_pct\\n        FROM daily_total_pnl\\n    )\\n\\n-- Final result - just daily gain\\nSELECT\\n    trade_date,\\n    'Total Daily Gain' as metric_name,\\n    total_daily_gain_pct as value\\nFROM total_daily_gain\\nORDER BY\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "LINE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "totalDailyGain",
+      "name": "Total Daily Gain"
+    },
+    "avgDailyGain7d": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "7-Day Average (%)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- Market information mapping\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY market_id\\n    ),\\n\\n    -- Calculate daily PnL across all markets\\n    daily_total_pnl AS (\\n        SELECT\\n            toDate(fills.timestamp) AS trade_date,\\n            -- Calculate total daily PnL across all markets\\n            sum(\\n                case \\n                    when fills.isBuy = 0 then -- sell order\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else -- buy order\\n                        -toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                end\\n            ) AS total_daily_pnl,\\n            -- Calculate total daily volume across all markets\\n            sum(toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)) AS total_daily_volume\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            fills.sigMaker = $address\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n        GROUP BY\\n            trade_date\\n    ),\\n\\n    -- Calculate total daily gain percentage\\n    total_daily_gain AS (\\n        SELECT\\n            trade_date,\\n            total_daily_pnl,\\n            total_daily_volume,\\n            -- Calculate total daily gain as percentage of total volume\\n            case \\n                when total_daily_volume > 0 then (total_daily_pnl / total_daily_volume) * 100\\n                else 0\\n            end as total_daily_gain_pct\\n        FROM daily_total_pnl\\n    )\\n\\n-- Final result - 7-day moving average\\nSELECT\\n    trade_date,\\n    '7-Day Average' as metric_name,\\n    -- Calculate 7-day moving average\\n    avg(total_daily_gain_pct) OVER (\\n        ORDER BY trade_date \\n        ROWS BETWEEN 6 PRECEDING AND CURRENT ROW\\n    ) AS value\\nFROM total_daily_gain\\nORDER BY\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "LINE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "avgDailyGain7d",
+      "name": "7-Day Average Daily Gain"
+    },
+    "avgDailyGain30d": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "30-Day Average (%)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- Market information mapping\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY market_id\\n    ),\\n\\n    -- Calculate daily PnL across all markets\\n    daily_total_pnl AS (\\n        SELECT\\n            toDate(fills.timestamp) AS trade_date,\\n            -- Calculate total daily PnL across all markets\\n            sum(\\n                case \\n                    when fills.isBuy = 0 then -- sell order\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else -- buy order\\n                        -toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                end\\n            ) AS total_daily_pnl,\\n            -- Calculate total daily volume across all markets\\n            sum(toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)) AS total_daily_volume\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            fills.sigMaker = $address\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n        GROUP BY\\n            trade_date\\n    ),\\n\\n    -- Calculate total daily gain percentage\\n    total_daily_gain AS (\\n        SELECT\\n            trade_date,\\n            total_daily_pnl,\\n            total_daily_volume,\\n            -- Calculate total daily gain as percentage of total volume\\n            case \\n                when total_daily_volume > 0 then (total_daily_pnl / total_daily_volume) * 100\\n                else 0\\n            end as total_daily_gain_pct\\n        FROM daily_total_pnl\\n    )\\n\\n-- Final result - 30-day moving average\\nSELECT\\n    trade_date,\\n    '30-Day Average' as metric_name,\\n    -- Calculate 30-day moving average\\n    avg(total_daily_gain_pct) OVER (\\n        ORDER BY trade_date \\n        ROWS BETWEEN 29 PRECEDING AND CURRENT ROW\\n    ) AS value\\nFROM total_daily_gain\\nORDER BY\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "LINE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "avgDailyGain30d",
+      "name": "30-Day Average Daily Gain"
+    },
+    "overallAvgDailyGain": {
+      "chart": {
+        "config": {
+          "xAxis": {
+            "name": "Date"
+          },
+          "yAxis": {
+            "name": "Overall Average (%)",
+            "scale": true
+          }
+        },
+        "datasourceType": "SQL",
+        "sqlExecuteEngine": "LITE",
+        "sqlQuery": "{\"sql\":\"WITH\\n    -- Market information mapping\\n    perpetual_markets_info AS (\\n        SELECT\\n            '0x38d43822f621968460a642f47db2c5a20b3d59826c6dd34811c78ba3866cc2d1' as market_id,\\n            'BTC-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            '0x30b7baece69ecd1b1bea5c965f22e52ffbb3dd28b15b79449971945b2687fc35' as market_id,\\n            'ETH-PERP' as market_name\\n        UNION ALL\\n        SELECT\\n            market AS market_id,\\n            argMax(name, timestamp) AS market_name\\n        FROM bluefin_perps.PerpetualCreation\\n        GROUP BY market_id\\n    ),\\n\\n    -- Calculate daily PnL across all markets\\n    daily_total_pnl AS (\\n        SELECT\\n            toDate(fills.timestamp) AS trade_date,\\n            -- Calculate total daily PnL across all markets\\n            sum(\\n                case \\n                    when fills.isBuy = 0 then -- sell order\\n                        toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                    else -- buy order\\n                        -toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)\\n                end\\n            ) AS total_daily_pnl,\\n            -- Calculate total daily volume across all markets\\n            sum(toFloat64(fills.fillPrice) * toFloat64(fills.fillQty)) AS total_daily_volume\\n        FROM bluefin_perps.OrderFillV2 AS fills\\n        JOIN perpetual_markets_info AS markets ON fills.market = markets.market_id\\n        WHERE\\n            fills.sigMaker = $address\\n            AND toDate(fills.timestamp) >= '2025-04-01'\\n        GROUP BY\\n            trade_date\\n    ),\\n\\n    -- Calculate total daily gain percentage\\n    total_daily_gain AS (\\n        SELECT\\n            trade_date,\\n            total_daily_pnl,\\n            total_daily_volume,\\n            -- Calculate total daily gain as percentage of total volume\\n            case \\n                when total_daily_volume > 0 then (total_daily_pnl / total_daily_volume) * 100\\n                else 0\\n            end as total_daily_gain_pct\\n        FROM daily_total_pnl\\n    )\\n\\n-- Final result - overall average as flat line\\nSELECT\\n    trade_date,\\n    'Overall Average' as metric_name,\\n    -- Calculate overall average (same for all dates)\\n    avg(total_daily_gain_pct) OVER () AS value\\nFROM total_daily_gain\\nORDER BY\\n    trade_date DESC;\",\"size\":10000}",
+        "type": "LINE"
+      },
+      "dashboardId": "ZFpTMN0a",
+      "id": "overallAvgDailyGain",
+      "name": "Overall Average Daily Gain"
+    }
+  },
+  "projectId": "JIlNJFyF",
+  "projectOwner": "sui",
+  "projectSlug": "main",
+  "tags": [
+    "sui",
+    "bluefin",
+    "pumpkin",
+    "perps",
+    "trading"
+  ],
+  "updatedAt": "2025-06-21T21:27:29.211221Z",
+  "url": "evandekim/quantfin-analytics",
+  "visibility": "PUBLIC"
+}

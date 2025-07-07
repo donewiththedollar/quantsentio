@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:dash.sentio.xyz)",
+      "WebFetch(domain:docs.sentio.xyz)"
+    ],
+    "deny": []
+  }
+}
